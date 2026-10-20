@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.8.16] - 2026-10-20
+
+### Added
+
+- *(macos,gui)* say when Secure Input pauses key remapping ([#1926](https://github.com/AprilNEA/OpenLogi/pull/1926))
+- *(inject,gui)* slide desktop switches like a three-finger swipe ([#1921](https://github.com/AprilNEA/OpenLogi/pull/1921))
+- *(inject)* type synthesized macOS keys through a virtual HID keyboard ([#1918](https://github.com/AprilNEA/OpenLogi/pull/1918))
+
+### Fixed
+
+- *(deps)* bump rustls-webpki and webpki roots for emSign advisories ([#1924](https://github.com/AprilNEA/OpenLogi/pull/1924))
+- *(agent)* relaunch when Input Monitoring is granted after launch ([#1919](https://github.com/AprilNEA/OpenLogi/pull/1919))
+
 ## [0.8.15] - 2026-10-20
 
 ### Added
