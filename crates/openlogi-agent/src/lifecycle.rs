@@ -663,8 +663,11 @@ impl Running {
     }
 
     fn restart_hidpp_watchers(&mut self) {
-        self.hidpp_watchers =
-            WatcherFleet::Running(startup::spawn_hidpp_watchers(&self.shared, &self.inputs));
+        self.hidpp_watchers = WatcherFleet::Running(startup::spawn_hidpp_watchers(
+            &self.shared,
+            &self.inputs,
+            &self.ring_haptics,
+        ));
     }
 
     #[cfg(all(unix, not(target_os = "macos")))]

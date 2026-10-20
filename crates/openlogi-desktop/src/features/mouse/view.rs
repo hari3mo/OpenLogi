@@ -69,6 +69,7 @@ struct MouseWorkspaceData<'a> {
     dpi_gestures: bool,
     virtual_thumbwheel: bool,
     wheel_hold: &'a BTreeSet<ButtonId>,
+    gesture_haptics: Option<bool>,
     editing_app: Option<String>,
     overridden: Option<&'a BTreeMap<ButtonId, Action>>,
 }
@@ -101,6 +102,11 @@ impl<'a> MouseWorkspaceData<'a> {
                 .and_then(|record| record.capabilities)
                 .is_some_and(|capabilities| capabilities.virtual_thumbwheel),
             wheel_hold: state.wheel_hold_buttons(),
+            gesture_haptics: state
+                .current_record()
+                .and_then(|record| record.capabilities)
+                .is_some_and(|capabilities| capabilities.haptic_feedback)
+                .then(|| state.current_gesture_haptics()),
             editing_app: state.editing_app().map(|app| profile_name(state, app)),
             overridden: state.editing_app_overrides(),
         })
@@ -122,6 +128,7 @@ impl<'a> MouseWorkspaceData<'a> {
             dpi_gestures: false,
             virtual_thumbwheel: false,
             wheel_hold: &NO_WHEEL_HOLD,
+            gesture_haptics: None,
             editing_app: None,
             overridden: None,
         }
@@ -309,6 +316,10 @@ impl MouseModelView {
 }
 
 impl Render for MouseModelView {
+    #[expect(
+        clippy::too_many_lines,
+        reason = "the view assembles the model canvas and the binding inspector inline"
+    )]
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         self.localize_action_picker_inputs(window, cx);
         let MouseWorkspaceData {
@@ -322,6 +333,7 @@ impl Render for MouseModelView {
             dpi_gestures,
             virtual_thumbwheel,
             wheel_hold,
+            gesture_haptics,
             editing_app,
             overridden,
         } = MouseWorkspaceData::read(cx).unwrap_or_else(MouseWorkspaceData::empty);
@@ -400,6 +412,7 @@ impl Render for MouseModelView {
                 dpi_gestures,
                 virtual_thumbwheel,
                 wheel_hold,
+                gesture_haptics,
                 editing_app: editing_app.as_deref(),
                 overridden,
             },

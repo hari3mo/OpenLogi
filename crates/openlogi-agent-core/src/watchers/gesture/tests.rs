@@ -184,7 +184,12 @@ async fn recovery_manager_waits_for_control_events_and_shutdown_between_retries(
             capture_plans,
             receiver_requests: access.subscribe_requests(),
             access: device_access,
-            outputs: GestureOutputs::new(actions.dispatcher(), scroll.input(), Arc::default()),
+            outputs: GestureOutputs::new(
+                actions.dispatcher(),
+                scroll.input(),
+                Arc::default(),
+                Arc::new(|_: DeviceRoute, _: bool| {}),
+            ),
             shutdown,
         }));
 
@@ -805,6 +810,7 @@ async fn a_pointer_only_plan_refresh_keeps_a_held_gesture() {
         actions.dispatcher(),
         scroll.input(),
         Arc::default(),
+        Arc::new(|_: DeviceRoute, _: bool| {}),
     ));
 
     let mut held = plan();
@@ -822,9 +828,11 @@ async fn a_pointer_only_plan_refresh_keeps_a_held_gesture() {
     assert!(dispatcher.holds_gesture_press(&id, ButtonId::GestureButton));
 
     // The swipe switched desktops, leaving the pointer over another window
-    // (#1634): the republished plan differs only in its pointer target.
+    // (#1634): the republished plan differs only in its pointer target, and
+    // here also in its haptic route, which a gesture-haptics toggle changes.
     let mut moved = held;
     moved.dispatch.pointer_target = Some(openlogi_hook::PointerTarget::Desktop);
+    moved.dispatch.haptic_route = Some(route());
     reconcile_session(
         &mut session,
         Some((&moved.target, &moved.dispatch)),
@@ -847,6 +855,100 @@ async fn a_pointer_only_plan_refresh_keeps_a_held_gesture() {
         &mut dispatcher,
     );
     assert!(!dispatcher.holds_gesture_press(&id, ButtonId::GestureButton));
+
+    scroll.shutdown();
+    actions.shutdown();
+}
+
+#[tokio::test]
+async fn a_fired_gesture_pulses_only_when_bound_and_enabled() {
+    use crate::runtime::scroll::{ScrollPreferences, ScrollRuntime};
+
+    let (_signal, device_io) = openlogi_hid::device_io_channel();
+    let (ring, _ring_rx) = mpsc::unbounded_channel();
+    let device_access = DeviceAccess {
+        channel: CaptureChannelSlot::default(),
+        registry: openlogi_hid::ChannelRegistry::default(),
+        receiver_access: ReceiverAccess::default(),
+        device_io,
+        transport_turns: crate::hardware::TransportTurns::default(),
+    };
+    let mut actions =
+        crate::runtime::ActionRuntime::new(Arc::default(), device_access, ring).unwrap();
+    let mut scroll = ScrollRuntime::spawn(Arc::new(ScrollPreferences::new(
+        false,
+        VerticalScrollSensitivity::default(),
+    )))
+    .unwrap();
+    let pulses = Arc::new(std::sync::Mutex::new(Vec::new()));
+    let recorded = Arc::clone(&pulses);
+    let mut dispatcher = InputDispatcher::new(GestureOutputs::new(
+        actions.dispatcher(),
+        scroll.input(),
+        Arc::default(),
+        Arc::new(move |route: DeviceRoute, arm: bool| {
+            recorded.lock().unwrap().push((route, arm));
+        }),
+    ));
+
+    // `ShowActionsRing` posts no OS input, so the gestures can fire for real.
+    let mut enabled = plan();
+    enabled.dispatch.haptic_route = Some(route());
+    enabled.dispatch.gesture_bindings.insert(
+        ButtonId::GestureButton,
+        [
+            (GestureDirection::Up, Action::ShowActionsRing),
+            (GestureDirection::Down, Action::None),
+            (GestureDirection::Click, Action::ShowActionsRing),
+        ]
+        .into(),
+    );
+    let mut disabled = enabled.clone();
+    disabled.dispatch.haptic_route = None;
+    let mut gesture = |epoch, plan: &DeviceCapturePlan, directions: &[GestureDirection]| {
+        let id = session_id(epoch);
+        let button = ButtonId::GestureButton;
+        dispatcher.dispatch(&id, &plan.dispatch, CapturedInput::ButtonDown(button));
+        for direction in directions {
+            let input = CapturedInput::Gesture(button, *direction);
+            dispatcher.dispatch(&id, &plan.dispatch, input);
+        }
+    };
+
+    // "Do Nothing" stays silent, and only the session's first pulse arms.
+    gesture(
+        7,
+        &enabled,
+        &[
+            GestureDirection::Up,
+            GestureDirection::Down,
+            GestureDirection::Click,
+        ],
+    );
+    let expected = vec![(route(), true), (route(), false)];
+    assert_eq!(*pulses.lock().unwrap(), expected);
+
+    // A new capture session re-asserts the firmware engine on its first pulse.
+    gesture(8, &enabled, &[GestureDirection::Up]);
+    let expected = vec![(route(), true), (route(), false), (route(), true)];
+    assert_eq!(*pulses.lock().unwrap(), expected);
+
+    // A plan without a haptic route — the setting off, or no haptics — is silent.
+    gesture(
+        9,
+        &disabled,
+        &[GestureDirection::Up, GestureDirection::Click],
+    );
+    assert_eq!(*pulses.lock().unwrap(), expected);
+
+    // A press the runtime no longer holds fires nothing, so it stays silent.
+    let id = session_id(10);
+    let button = ButtonId::GestureButton;
+    dispatcher.dispatch(&id, &enabled.dispatch, CapturedInput::ButtonDown(button));
+    actions.dispatcher().cancel_all_buttons();
+    let input = CapturedInput::Gesture(button, GestureDirection::Up);
+    dispatcher.dispatch(&id, &enabled.dispatch, input);
+    assert_eq!(*pulses.lock().unwrap(), expected);
 
     scroll.shutdown();
     actions.shutdown();

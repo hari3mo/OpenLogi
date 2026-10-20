@@ -99,6 +99,15 @@ pub(super) fn wheel_inverted(config: &Config, dev: &AgentDevice) -> bool {
     }
 }
 
+/// Where `enabled` haptic feedback plays for `dev`: its route while it is
+/// online and advertises `0x19b0`. The Actions Ring and gesture confirmation
+/// both answer from here.
+pub(super) fn haptic_route(dev: &AgentDevice, enabled: bool) -> Option<DeviceRoute> {
+    (enabled && dev.online && dev.capabilities.is_some_and(|caps| caps.haptic_feedback))
+        .then(|| dev.route.clone())
+        .flatten()
+}
+
 /// The saved report rate to push to `dev`: only to a device with a
 /// report-rate feature, so a rate saved for a mouse is never written to
 /// whatever later answers under the same key without one.

@@ -292,6 +292,9 @@ pub(super) fn fold(device: &mut DeviceConfig, mut legacy: DeviceConfig, route_ke
     // `smooth_wheel` is a bare opt-in with no per-link slot: for the same
     // reason only a legacy `true` is evidence of a choice, so it carries over.
     device.smooth_wheel |= legacy.smooth_wheel;
+    // `gesture_haptics` mirrors `enabled`: on by default and persisted only
+    // when `false`, so a legacy `false` is the user's opt-out and carries over.
+    device.gesture_haptics &= legacy.gesture_haptics;
 
     // Scalar values with no per-link override slot: take the legacy value
     // when the canonical side is unset. A genuine disagreement keeps the

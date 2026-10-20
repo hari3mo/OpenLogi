@@ -148,6 +148,10 @@ impl LinkOverrides {
 /// shape on its next save.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(from = "RawDeviceConfig")]
+#[expect(
+    clippy::struct_excessive_bools,
+    reason = "independent on/off device settings persisted as TOML booleans, not a state machine"
+)]
 pub struct DeviceConfig {
     /// Whether OpenLogi manages this device at all. `false` leaves the device
     /// fully native: no capture session (no HID++ diversion of any control)
@@ -277,6 +281,11 @@ pub struct DeviceConfig {
     /// native, and is omitted from `config.toml`.
     #[serde(default, skip_serializing_if = "is_false")]
     pub smooth_wheel: bool,
+    /// Play a haptic pulse when a gesture on this device runs its action
+    /// (HID++ `0x19b0`, e.g. MX Master 4). `true` (default) is omitted from
+    /// `config.toml`.
+    #[serde(default = "default_true", skip_serializing_if = "is_true")]
+    pub gesture_haptics: bool,
     /// Physical config keys of pointing devices that follow this keyboard's
     /// host switch channel. The relationship is keyboard-initiated: pressing
     /// one of this device's host keys switches every listed target first, then
@@ -404,6 +413,7 @@ impl Default for DeviceConfig {
             invert_scroll: false,
             scroll_resolution: None,
             smooth_wheel: false,
+            gesture_haptics: true,
             host_switch_targets: Vec::new(),
             fn_lock: None,
             keep_os_layout: None,
@@ -474,6 +484,10 @@ where
 /// in the v2 shape.
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
+#[expect(
+    clippy::struct_excessive_bools,
+    reason = "mirrors DeviceConfig's independent on/off settings"
+)]
 struct RawDeviceConfig {
     /// Explicit gesture owner (v2.1+). Absent on older configs → `None` → the
     /// owner is inferred during the version-gated migration. A
@@ -526,6 +540,8 @@ struct RawDeviceConfig {
     scroll_resolution: Option<ScrollResolution>,
     #[serde(default)]
     smooth_wheel: bool,
+    #[serde(default = "default_true")]
+    gesture_haptics: bool,
     #[serde(default)]
     host_switch_targets: Vec<String>,
     #[serde(default)]
@@ -593,6 +609,7 @@ impl From<RawDeviceConfig> for DeviceConfig {
             invert_scroll: raw.invert_scroll,
             scroll_resolution: raw.scroll_resolution,
             smooth_wheel: raw.smooth_wheel,
+            gesture_haptics: raw.gesture_haptics,
             host_switch_targets: raw.host_switch_targets,
             fn_lock: raw.fn_lock,
             keep_os_layout: raw.keep_os_layout,

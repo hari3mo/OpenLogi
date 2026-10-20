@@ -64,9 +64,9 @@ use devices::reapply_targets;
 use devices::{
     RECONNECT_REAPPLY_CONFIRM_RETRIES, VOLATILE_REAPPLY_CONFIRM_RETRIES,
     any_device_needs_capture_rearm, build_devices, config_keeps_os_layout, configured_report_rate,
-    configured_wheel_mode, host_switch_links, is_hidpp_device, keeps_os_layout, main_wheel_divert,
-    newly_kept_os_layouts, os_layout_appeared, pick_current, plan_reapply, settings_moved,
-    stable_id, wheel_inverted,
+    configured_wheel_mode, haptic_route, host_switch_links, is_hidpp_device, keeps_os_layout,
+    main_wheel_divert, newly_kept_os_layouts, os_layout_appeared, pick_current, plan_reapply,
+    settings_moved, stable_id, wheel_inverted,
 };
 
 /// The minimal per-device facts the agent needs: the config key (binding /
@@ -806,6 +806,8 @@ impl Orchestrator {
                 self.os_mouse_hook_available,
             );
             plan.dispatch.pointer_target = pointer_target;
+            plan.dispatch.haptic_route =
+                haptic_route(dev, self.config.gesture_haptics(&dev.config_key));
             plan.dispatch.invert_wheel = wheel_inverted(&self.config, dev);
             plan.target.spec.divert_main_wheel =
                 main_wheel_divert(&self.config, dev, self.os_mouse_hook_available);
@@ -1231,16 +1233,9 @@ impl Orchestrator {
         if layout.slots.is_empty() {
             return None;
         }
-        let haptic_route = (device.online
-            && ring.haptics
-            && device
-                .capabilities
-                .is_some_and(|capabilities| capabilities.haptic_feedback))
-        .then(|| device.route.clone())
-        .flatten();
         Some(ActionRingSessionSpec {
             device_key: key.to_owned(),
-            haptic_route,
+            haptic_route: haptic_route(device, ring.haptics),
             layout,
             language: self.config.app_settings.language.clone(),
         })

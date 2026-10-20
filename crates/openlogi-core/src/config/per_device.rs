@@ -430,4 +430,23 @@ impl Config {
             .or_default()
             .smooth_wheel = enabled;
     }
+
+    /// Whether a gesture that runs its action on `device_key` plays a haptic
+    /// pulse
+    /// ([`DeviceConfig::gesture_haptics`](super::DeviceConfig::gesture_haptics)).
+    /// Unconfigured devices pulse.
+    #[must_use]
+    pub fn gesture_haptics(&self, device_key: &str) -> bool {
+        self.devices
+            .get(device_key)
+            .is_none_or(|d| d.gesture_haptics)
+    }
+
+    /// Turn `device_key`'s gesture haptics on or off.
+    pub fn set_gesture_haptics(&mut self, device_key: &str, enabled: bool) {
+        self.devices
+            .entry(device_key.to_string())
+            .or_default()
+            .gesture_haptics = enabled;
+    }
 }

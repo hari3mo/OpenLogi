@@ -106,6 +106,20 @@ fn a_smooth_wheel_opt_in_survives_route_adoption() {
 }
 
 #[test]
+fn a_gesture_haptics_opt_out_survives_route_adoption() {
+    let route = "receiver:82839805:slot:2";
+    let mut config = Config::default();
+    config.set_gesture_haptics(route, false);
+    let canonical = crate::device_order::PhysicalDeviceKey::parse("unit:4f4c4403").expect("valid");
+    assert!(config.adopt_route(&canonical, route, None));
+    assert!(
+        !config.devices.contains_key(route),
+        "sanity: the route entry folded"
+    );
+    assert!(!config.gesture_haptics("unit:4f4c4403"));
+}
+
+#[test]
 fn scroll_resolution_roundtrips_all_three_states() {
     let mut cfg = Config::default();
     assert_eq!(cfg.scroll_resolution("mouse"), None);

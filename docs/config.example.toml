@@ -34,6 +34,9 @@ invert_scroll = false
 scroll_resolution = "high"
 # Ease this mouse's main wheel in software (needs Accessibility on macOS).
 smooth_wheel = true
+# A mouse with haptic feedback pulses when a gesture runs its action (default
+# true); false silences it.
+gesture_haptics = false
 
 [devices."receiver:aabbccdd:slot:1".bindings]
 Back = "BrowserBack"

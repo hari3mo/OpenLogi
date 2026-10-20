@@ -28,8 +28,8 @@ use std::sync::Arc;
 use openlogi_core::device_order::PhysicalDeviceKey;
 use openlogi_core::scroll::ScrollDelta;
 use openlogi_hid::{
-    CaptureHost, CaptureSessionOutcome, CaptureSessionStop, CapturedInput, PendingCaptureRestore,
-    run_capture_session,
+    CaptureHost, CaptureSessionOutcome, CaptureSessionStop, CapturedInput, DeviceRoute,
+    PendingCaptureRestore, run_capture_session,
 };
 use tokio::sync::{mpsc, oneshot, watch};
 use tokio::time::Instant;
@@ -49,12 +49,17 @@ use crate::runtime::hook::SharedHookMaps;
 use crate::runtime::scroll::ScrollInputHandle;
 use crate::runtime::{ActionDispatcher, HidppSessionId};
 
+/// Plays a fired gesture's haptic on a device route; `true` re-asserts
+/// the firmware haptic engine first.
+pub type GestureHaptics = Arc<dyn Fn(DeviceRoute, bool) + Send + Sync>;
+
 /// Output capabilities shared by every HID++ gesture capture session.
 #[derive(Clone)]
 pub struct GestureOutputs {
     actions: ActionDispatcher,
     scroll: ScrollInputHandle,
     hook_maps: SharedHookMaps,
+    haptics: GestureHaptics,
 }
 
 impl GestureOutputs {
@@ -64,11 +69,13 @@ impl GestureOutputs {
         actions: ActionDispatcher,
         scroll: ScrollInputHandle,
         hook_maps: SharedHookMaps,
+        haptics: GestureHaptics,
     ) -> Self {
         Self {
             actions,
             scroll,
             hook_maps,
+            haptics,
         }
     }
 
@@ -92,6 +99,10 @@ impl GestureOutputs {
             // `direct` is already scaled by the wheel's sensitivity.
             openlogi_inject::post_scroll(direct);
         }
+    }
+
+    fn play_haptic(&self, route: DeviceRoute, arm: bool) {
+        (self.haptics)(route, arm);
     }
 }
 
@@ -216,7 +227,8 @@ fn wanted_sessions(
 }
 
 /// Whether two dispatch plans resolve every input to the same action, differing
-/// at most in the hovered window they were selected for.
+/// at most in the hovered window they were selected for and in where a fired
+/// gesture's haptic plays.
 fn same_bindings(a: &DispatchPlan, b: &DispatchPlan) -> bool {
     let DispatchPlan {
         config_key,
@@ -226,6 +238,7 @@ fn same_bindings(a: &DispatchPlan, b: &DispatchPlan) -> bool {
         thumbwheel_sensitivity,
         invert_wheel,
         pointer_target: _,
+        haptic_route: _,
     } = a;
     *config_key == b.config_key
         && *bindings == b.bindings
@@ -243,9 +256,9 @@ fn reconcile_session(
     // A swipe that switches desktops moves the pointer onto another window,
     // republishing an otherwise identical plan. Keep the hold so the same
     // press can chain further swipes (#1634).
-    let pointer_only = wanted.is_some_and(|(_, plan)| same_bindings(session.dispatch(), plan));
+    let keeps_hold = wanted.is_some_and(|(_, plan)| same_bindings(session.dispatch(), plan));
     if session.reconcile_with(wanted, stop_for_target_change) == ReconcileAction::DispatchChanged {
-        if !pointer_only {
+        if !keeps_hold {
             dispatcher.cancel_session(session.id());
         }
         let config_key = session.dispatch().config_key.clone();

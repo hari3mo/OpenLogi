@@ -40,6 +40,9 @@ pub(super) struct BindingInspectorData<'a> {
     pub virtual_thumbwheel: bool,
     /// Buttons that hold the wheel to scroll sideways, from the global profile.
     pub wheel_hold: &'a BTreeSet<ButtonId>,
+    /// The device's gesture haptics switch; `None` on a device without
+    /// haptic feedback.
+    pub gesture_haptics: Option<bool>,
     pub editing_app: Option<&'a str>,
     pub overridden: Option<&'a BTreeMap<ButtonId, Action>>,
 }
@@ -328,6 +331,22 @@ fn wheel_hold_row(
     )
 }
 
+/// The device-wide switch for a pulse when a gesture runs its action,
+/// offered on a device with haptic feedback.
+fn gesture_haptics_row(enabled: bool, pal: Palette) -> impl IntoElement {
+    toggle_row(
+        "inspector-gesture-haptics-row",
+        pal,
+        tr!("action_ring.haptic_feedback"),
+        tr!("actions.gesture_haptic_description"),
+        Toggle::new("inspector-gesture-haptics-toggle")
+            .selected(enabled)
+            .on_change(|enabled, _window, cx| {
+                AppState::apply(cx, |state| state.commit_gesture_haptics(*enabled));
+            }),
+    )
+}
+
 fn inherited_gesture_inspector(
     button: ButtonId,
     app: &str,
@@ -423,6 +442,9 @@ fn gesture_inspector(
         .child(current_action_card(&current, picker, pal))
         .when(offer_wheel_hold, |panel| {
             panel.child(wheel_hold_row(button, false, picker.view, pal))
+        })
+        .when_some(data.gesture_haptics, |panel, enabled| {
+            panel.child(gesture_haptics_row(enabled, pal))
         })
         .child(
             control_button("inspector-single-action")
@@ -996,6 +1018,7 @@ mod tests {
             dpi_gestures: false,
             virtual_thumbwheel: true,
             wheel_hold,
+            gesture_haptics: None,
             editing_app: None,
             overridden: None,
         }

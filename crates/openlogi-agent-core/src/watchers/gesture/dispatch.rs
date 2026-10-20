@@ -103,6 +103,9 @@ pub(super) struct InputDispatcher {
     outputs: GestureOutputs,
     wheels: SessionWheels,
     held_presses: HeldPresses,
+    /// Capture session whose first gesture pulse re-asserted the firmware
+    /// haptic engine.
+    haptics_armed: Option<HidppSessionId>,
 }
 
 impl InputDispatcher {
@@ -113,6 +116,7 @@ impl InputDispatcher {
             outputs,
             wheels: SessionWheels::default(),
             held_presses: HeldPresses::default(),
+            haptics_armed: None,
         }
     }
 
@@ -169,11 +173,13 @@ impl InputDispatcher {
                     .and_then(|map| map.get(&direction))
                 {
                     debug!(key, %button, ?direction, action = %action.label(), "gesture → action");
-                    if !self
+                    if self
                         .outputs
                         .actions
                         .try_dispatch_while_pressed(press, action)
                     {
+                        self.confirm_gesture(session, plan, action);
+                    } else {
                         debug!(key, %button, ?direction, "gesture press no longer active — ignored");
                     }
                 } else {
@@ -247,6 +253,26 @@ impl InputDispatcher {
                 unreachable!("thumb-wheel direction reports return before dispatch")
             }
         }
+    }
+
+    /// Pulse the device a gesture fired on, when its plan enables gesture
+    /// haptics and the gesture does something (`Action::None` stays silent).
+    /// A capture session's first pulse re-asserts the firmware haptic engine,
+    /// which the reconnect or wake that started the session can clear — as
+    /// the Actions Ring arms once per session.
+    fn confirm_gesture(&mut self, session: &HidppSessionId, plan: &DispatchPlan, action: &Action) {
+        let Some(route) = plan.haptic_route.clone() else {
+            return;
+        };
+        if matches!(action, Action::None) {
+            return;
+        }
+        let arm = !self
+            .haptics_armed
+            .as_ref()
+            .is_some_and(|armed| armed.same_epoch(session));
+        self.haptics_armed = Some(session.clone());
+        self.outputs.play_haptic(route, arm);
     }
 
     /// Main-wheel movement under a held wheel-hold button: scroll in its

@@ -83,6 +83,43 @@ fn published_plans_carry_the_held_wheel_inversion_of_the_link() {
     assert!(plan.dispatch.invert_wheel);
 }
 
+/// The published plan carries where a fired gesture's haptic plays: the
+/// device's route while its setting (on by default) is on and the device
+/// advertises haptic feedback, which `plan_for_device` alone cannot see.
+#[test]
+fn published_plans_carry_the_gesture_haptic_route() {
+    let device = |haptic_feedback| {
+        let mut device = dev("a", 1, true);
+        device.capabilities = Some(Capabilities {
+            haptic_feedback,
+            ..Capabilities::default()
+        });
+        device
+    };
+    let published_route = |config: Config, device: AgentDevice| {
+        let mut orch = orchestrator(config);
+        orch.devices = vec![device];
+        orch.rebuild();
+        let published = orch.shared.capture_plans.borrow();
+        published
+            .plans()
+            .first()
+            .expect("the online device is planned")
+            .dispatch
+            .haptic_route
+            .clone()
+    };
+    assert_eq!(
+        published_route(Config::default(), device(true)),
+        device(true).route
+    );
+
+    let mut off = Config::default();
+    off.set_gesture_haptics("a", false);
+    assert_eq!(published_route(off, device(true)), None);
+    assert_eq!(published_route(Config::default(), device(false)), None);
+}
+
 /// A smooth-wheel device's published plan asks its session to divert the
 /// wheel once the hook may post the scrolling, and leaves it native again
 /// when the hook goes away.

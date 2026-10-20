@@ -471,8 +471,9 @@ impl Agent for AgentServer {
     }
 }
 
-/// Coalescing Actions Ring haptic player: at most one waveform is in flight,
-/// and while it plays only the newest queued request survives (latest wins).
+/// Coalescing haptic player for the Actions Ring and gesture confirmation: at
+/// most one waveform is in flight, and while it plays only the newest queued
+/// request survives (latest wins).
 ///
 /// Spawning one task per hover let a fast pointer queue HID++ plays faster
 /// than the receiver drains them; the backlog then times out every
@@ -753,6 +754,16 @@ impl RingHapticPlayer {
             *pending = Some(route);
         }
         let _ = self.tx.send(None);
+    }
+
+    /// Confirm a fired gesture with the activation pulse, re-asserting the
+    /// firmware haptic engine first when `arm` (a capture session's first
+    /// pulse). Shares the ring's worker, so one play is ever in flight.
+    pub(crate) fn gesture(&self, route: DeviceRoute, arm: bool) {
+        if arm {
+            self.arm(Some(route.clone()));
+        }
+        self.play(Some(route), HapticWaveform::DampStateChange, "gesture");
     }
 
     /// Queue `waveform`, replacing any not-yet-played request.

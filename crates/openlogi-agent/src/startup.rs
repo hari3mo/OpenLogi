@@ -196,7 +196,9 @@ impl HidppWatcherHandles {
 pub(crate) fn spawn_hidpp_watchers(
     shared: &SharedHandles,
     inputs: &InputServices,
+    haptics: &server::RingHapticPlayer,
 ) -> HidppWatcherHandles {
+    let haptics = haptics.clone();
     let gesture = watchers::gesture::spawn(
         &shared.capture_plans,
         shared.device_access(),
@@ -204,6 +206,7 @@ pub(crate) fn spawn_hidpp_watchers(
             inputs.dispatcher.clone(),
             inputs.scroll_input.clone(),
             shared.hook_maps.clone(),
+            Arc::new(move |route, arm| haptics.gesture(route, arm)),
         ),
     );
     let host_switch = watchers::host_switch::spawn(

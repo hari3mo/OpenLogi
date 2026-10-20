@@ -546,6 +546,36 @@ impl AppState {
         events
     }
 
+    /// Whether a gesture that runs its action on the active device plays a
+    /// haptic pulse: on unless the device switched it off.
+    #[must_use]
+    pub fn current_gesture_haptics(&self) -> bool {
+        self.current_record()
+            .and_then(DeviceRecord::persistent_config_key)
+            .is_none_or(|key| self.config.gesture_haptics(key))
+    }
+
+    /// Turn the active device's gesture haptics on or off, persist it, and
+    /// reload the agent so its capture plans carry the haptic route.
+    /// Committing the current value saves and reloads nothing.
+    pub fn commit_gesture_haptics(&mut self, enabled: bool) -> StateEvents {
+        let events = self.for_current_device(StateEvent::BindingsChanged);
+        let Some(key) = self
+            .current_record()
+            .and_then(DeviceRecord::persistent_config_key)
+            .map(str::to_string)
+        else {
+            return events;
+        };
+        if self.config.gesture_haptics(&key) == enabled {
+            return events;
+        }
+        self.config
+            .edit(|config| config.set_gesture_haptics(&key, enabled));
+        self.persist_and_reload("gesture haptics");
+        events
+    }
+
     /// Update one direction of `button`'s gesture binding in memory, on disk,
     /// and (via reload) in the maps the agent dispatches from.
     pub fn commit_gesture_binding(
