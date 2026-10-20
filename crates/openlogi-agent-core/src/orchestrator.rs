@@ -62,11 +62,12 @@ pub use lights::{ConfigSource, LightWriteClaim, TakenLightChange, write_light};
 #[cfg(test)]
 use devices::reapply_targets;
 use devices::{
-    RECONNECT_REAPPLY_CONFIRM_RETRIES, VOLATILE_REAPPLY_CONFIRM_RETRIES,
-    any_device_needs_capture_rearm, build_devices, config_keeps_os_layout, configured_report_rate,
-    configured_wheel_mode, host_switch_links, is_hidpp_device, keeps_os_layout, main_wheel_divert,
-    newly_kept_os_layouts, os_layout_appeared, pick_current, plan_reapply, settings_moved,
-    stable_id, wheel_inverted,
+    FollowerCookieWrite, RECONNECT_REAPPLY_CONFIRM_RETRIES, VOLATILE_REAPPLY_CONFIRM_RETRIES,
+    any_device_needs_capture_rearm, build_devices, changed_follower_cookies,
+    config_keeps_os_layout, configured_report_rate, configured_wheel_mode, host_switch_links,
+    is_hidpp_device, keeps_os_layout, main_wheel_divert, newly_kept_os_layouts, os_layout_appeared,
+    pick_current, plan_reapply, reconnect_follower_cookies, settings_moved, stable_id,
+    wheel_inverted,
 };
 
 /// The minimal per-device facts the agent needs: the config key (binding /
@@ -1068,6 +1069,19 @@ impl Orchestrator {
                 .hardware
                 .set_light_in_background(Some(route), &light, capabilities);
         }
+        self.write_follower_cookies(reconnect_follower_cookies(&self.config, &self.devices, dev));
+    }
+
+    /// Write the `ChangeHost` cookies of linked pointing devices, so that Logi
+    /// Options+ on a keyboard's other hosts moves the same devices.
+    fn write_follower_cookies(&self, writes: Vec<FollowerCookieWrite>) {
+        for write in writes {
+            crate::hardware::write_follower_cookies_in_background(
+                self.shared.device(&write.follower),
+                write.lead,
+                write.link,
+            );
+        }
     }
 
     /// Put `dev`'s keyboard on the host OS's key layout when the config keeps
@@ -1431,6 +1445,11 @@ impl Orchestrator {
         self.apply_native_wheel_modes();
         self.apply_changed_fn_locks(&previous);
         self.apply_enabled_os_layouts(&previous);
+        self.write_follower_cookies(changed_follower_cookies(
+            &previous,
+            &self.config,
+            &self.devices,
+        ));
         self.changed_lights(&previous_lights)
     }
 
