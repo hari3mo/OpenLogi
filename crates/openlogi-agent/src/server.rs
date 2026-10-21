@@ -756,14 +756,18 @@ impl RingHapticPlayer {
         let _ = self.tx.send(None);
     }
 
-    /// Confirm a fired gesture with the activation pulse, re-asserting the
-    /// firmware haptic engine first when `arm` (a capture session's first
-    /// pulse). Shares the ring's worker, so one play is ever in flight.
+    /// Confirm a fired gesture with the ring's light hover tick rather than
+    /// its activation thump: a gesture fires mid-swipe, under the hand, where
+    /// the firmer waveform reads as a double knock. Re-asserts the firmware
+    /// haptic engine first when `arm` (a capture session's first pulse).
+    /// Shares the ring's worker, so one play is ever in flight.
+    // ponytail: fixed waveform; make it a per-device setting if one tick does
+    // not suit everyone (WHISPER_COLLISION 0x1B is softer still, unverified).
     pub(crate) fn gesture(&self, route: DeviceRoute, arm: bool) {
         if arm {
             self.arm(Some(route.clone()));
         }
-        self.play(Some(route), HapticWaveform::DampStateChange, "gesture");
+        self.play(Some(route), HapticWaveform::SubtleCollision, "gesture");
     }
 
     /// Queue `waveform`, replacing any not-yet-played request.
